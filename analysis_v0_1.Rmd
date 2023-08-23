@@ -1,0 +1,459 @@
+---
+title: "Lusanda Madula"
+output: html_document
+date: "2023-07-10"
+editor_options: 
+  chunk_output_type: console
+---
+
+# List of PD gene of Neuro Booster array.
+
+```{r}
+library(tidyverse)
+library(knitr)
+library(kableExtra)
+```
+
+##load in data
+
+```{r}
+data <- read_csv("data/pd_gene_anno.csv")
+#VEP_results <- read.delim("VEP_results.txt")
+```
+
+## Clean VEP results
+
+```{r results='hide'}
+file_path <- "data/Vep_results_neuroboost_21-08-2023.txt"
+chip <- "nb"
+source("prep_VEP_results_v0_2.R") # Elizna script
+
+
+VEP_results_nb <- read_rds("rds/VEP_results_nb.rds")
+VEP_results_pheno_nb <- read_rds("rds/VEP_results_pheno_nb.rds")
+
+VEP_results %>% 
+  filter(!str_detect(Existing_variation, X.Uploaded_variation))
+
+# VEP results has rsids that were not in the input
+# filter out
+
+data %>% 
+  select(location_data = `Genomic coordinates (GRCh38)`, 
+         dbsnp) %>% 
+  full_join(VEP_results_nb %>% 
+              select(dbsnp = X.Uploaded_variation)) %>% 
+  distinct() %>% 
+  arrange(dbsnp) %>% 
+  print(n = 100)
+
+VEP_results_nb <- data %>% 
+  select(dbsnp) %>% 
+  filter(!is.na(dbsnp)) %>% 
+  distinct() %>% 
+  rename(X.Uploaded_variation = dbsnp) %>% 
+  inner_join(VEP_results_nb)
+
+# REMOVE UNWANTED PHENOTYPES HERE
+
+unique(VEP_results_pheno_nb$pheno_consolidated)
+
+VEP_results_nb <- VEP_results_pheno_nb %>% 
+  filter(pheno_consolidated %in% c("park_dementia_synd",
+                                   "pd_no_age_category",
+                                   "pd_early_onset",
+                                   "pd_late_onset")) %>% 
+  select(X.Uploaded_variation) %>% 
+  distinct() %>% 
+  inner_join(VEP_results_nb)
+
+# compare in data
+
+unique(data$`Disease/Phenotype`)
+x <- c("parkinson disease", "parkinsons disease")
+
+data <- data %>% 
+  mutate(across(`Disease/Phenotype`, 
+                ~tolower(.x))) %>% 
+  filter(str_detect(`Disease/Phenotype`, x[1]) |
+           str_detect(`Disease/Phenotype`, x[2])) %>% 
+  distinct()
+  
+data %>% 
+  left_join(VEP_results_pheno_nb %>% 
+              rename(dbsnp = X.Uploaded_variation) %>% 
+              filter(pheno_consolidated %in% c("park_dementia_synd",
+                                   "pd_no_age_category",
+                                   "pd_early_onset",
+                                   "pd_late_onset"))) %>% 
+  distinct(dbsnp, `Disease/Phenotype`, pheno_consolidated) %>% 
+  print(n = Inf)
+       
+```
+
+##change column names, column 1 and column 4
+
+```{r}
+colnames(data)[1] <- "location"
+
+colnames(data)[4] <- "gene"
+
+data %>% 
+  group_by(location) %>% 
+  count() %>% 
+  filter(n != 1) %>% 
+  inner_join(data)
+
+# remove phenotype column for now
+
+data_pheno <- data %>% 
+  select(location, dbsnp, `Disease/Phenotype`)
+
+data <- data %>% 
+  select(-`Disease/Phenotype`) %>% 
+  distinct()
+
+# some rows have no location - exclude
+
+data <- data %>% 
+  filter(!is.na(location))
+
+# some rsids have a duplicate row with NA - remove
+
+tmp <- data %>% 
+  group_by(location) %>% 
+  count() %>% 
+  filter(n != 1) %>% 
+  inner_join(data) %>% 
+  filter(is.na(dbsnp))
+
+data <- data %>% 
+  anti_join(tmp)
+
+# data now has no duplicates
+data
+```
+
+##split chromosomes into chromosome number
+
+```{r}
+data <- data %>% mutate(chr_num = str_extract(location, "chr[A-Za-z0-9]{1,2}"))
+
+```
+
+##group by chromosomes, calculate how many variants are presents per chromosome.Since we have different chromosomes and they are not arranged so we need to arrange them in ascending order, for the proper or representative bar graph.Additional heading of the graph using the labs.Thus in order to have different colors you must use the code, fill.
+
+```{r}
+# all snps in data
+grp <- data %>% group_by(chr_num) %>% count()
+
+lvls <- paste("chr", 1:22, sep = "")
+lvls <- c(lvls, "chrX")
+
+grp$chr_num <- factor(grp$chr_num, levels = lvls)
+
+grp %>% 
+  ggplot(aes(x = chr_num, y = n, fill= chr_num))+
+  geom_col() +
+  labs(title = "Number of variants per chromosome", x= "chr_num", y= "n")
+
+# only snps with rsids only
+
+grp2 <- data %>% 
+  filter(!is.na(dbsnp)) %>% 
+  group_by(chr_num) %>% count()
+
+lvls <- paste("chr", 1:22, sep = "")
+lvls <- c(lvls, "chrX")
+
+grp2$chr_num <- factor(grp2$chr_num, levels = lvls)
+
+grp2 %>% 
+  ggplot(aes(x = chr_num, y = n, fill= chr_num))+
+  geom_col() +
+  labs(title = "Number of variants per chromosome, missing RSIDs excluded", x= "chr_num", y= "n")
+
+```
+
+##group by genes, how many variants per gene.The LRRK2 shows a highest variant among other genes.
+
+```{r}
+
+# all snps in data
+genes <- data %>% group_by(gene) %>% count()
+
+genes %>%
+  ggplot(aes(x= gene, y= n)) +
+  geom_col()+
+  theme(axis.text.x = element_text(angle = 90, vjust  = 0.5, hjust = 1, size = 6))
+
+# missing rsids excluded
+
+
+
+```
+
+##make a table of different chromosome types
+
+```{r}
+
+# all snps
+grp  %>% 
+  kable(caption = "All variants") %>% 
+  kable_styling(full_width = FALSE, position = "left")
+
+
+# only non-missing rsids
+
+grp2  %>% 
+  kable(caption = "Only variants with RSIDs") %>% 
+  kable_styling(full_width = FALSE, position = "left")
+
+```
+
+##make a table of different gene types
+
+```{r}
+
+# all
+
+genes %>%
+  arrange(desc(n)) %>% 
+  kable() %>% 
+  kable_styling(full_width = FALSE, position = "left")
+
+# only non-missing rsids
+
+```
+
+## Summary of rsID present and absent. some columns they only have phenotype without the chromosome number and the position where we can find the variant.
+
+```{r}
+
+data %>% 
+  group_by(!is.na(dbsnp)) %>% 
+  count()
+
+```
+
+Imported only SNPs with rsids to VEP.
+
+
+##Import the vep_result on R and make some summaries(tables and bar graphs)
+##Get list of unique categories present in column biotype(can use the following code unique(name of the data $ the column name))
+#Group by biotype
+
+```{r}
+biotype <- VEP_results %>% group_by(BIOTYPE) %>% count()
+
+biotype %>% 
+  ggplot(aes(x = BIOTYPE, y = n, fill= BIOTYPE))+
+  geom_col() +
+  labs(title = "Number of variants per Biotype", x= "BIOTYPE", y= "n")
+```
+
+## Save table for biotype
+
+```{r}
+biotype %>%
+  kable() %>% 
+  kable_styling(full_width = FALSE, position = "left")
+#write.table(biotype, file = "biotype.txt", quote=FALSE, row.name=FALSE)
+```
+
+## Group by consequence
+
+```{r}
+consequence <- VEP_results %>% group_by(Consequence) %>% count()
+
+consequence %>%
+  ggplot(aes(x= Consequence, y= n))+
+  geom_col()+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size= 6))
+
+```
+
+##Save table for consequence
+
+```{r}
+consequence %>%
+  kable() %>% 
+  kable_styling(full_width = FALSE, position = "left")
+#write.table(consequence, file ="consequence.txt", quote = FALSE, row.names = FALSE)
+```
+
+##Group by IMPACT
+
+```{r}
+IMPACT <- VEP_results %>% group_by(IMPACT) %>% count()
+
+IMPACT %>%
+  ggplot(aes(x= IMPACT, y= n, fill= IMPACT)) +
+  geom_col() +
+  labs(title = "Number of variants in different impact", x= "IMPACT", y= "n")
+```
+
+##Save table for impact
+
+```{r}
+IMPACT %>%
+  kable() %>% 
+  kable_styling(full_width = FALSE, position = "left")
+#write.table(IMPACT, file = "impact.txt", quote = FALSE, row.names = FALSE)
+```
+
+## On the sift column, we removed the brackets so that R will be able to read, into two colomn the sift_category and sift_scrore.
+
+```{r}
+VEP_results <- VEP_results %>% 
+  separate(SIFT,into = c("SIFT_category", "SIFT_score"),
+           sep = "\\(") %>% 
+  mutate(across(SIFT_score, ~as.numeric(gsub("\\)", "", .x))))
+```
+
+##Group by sift. how many we tolerated and deleterouis. Make the bar graph about the results that you found.
+
+```{r}
+SIFT <- VEP_results %>% group_by(SIFT_category) %>% count()
+
+SIFT %>%
+  ggplot(aes(x= SIFT_category, y= n, fill = SIFT_category))+
+  geom_col()
+```
+
+##Save the table for the Sift_categoty
+
+```{r}
+#write.csv(SIFT, file= "SIFT_caterory.csv", quote = FALSE, row.names= FALSE)
+```
+
+
+##The gene table is combined with the sift_category, which genes have the highest percentage of deleterious SNP
+```{r}
+genes<-genes %>% 
+  rename(total_n = n)
+
+Percentage_del_SIFT<- VEP_results %>%
+  rename(gene = SYMBOL) %>% 
+  group_by(gene, SIFT_category) %>% 
+  count() %>% 
+  filter(SIFT_category == "deleterious") %>% 
+  inner_join(genes) %>% 
+  select(gene, total_n, SIFT_category, n) %>% 
+  arrange(desc(n)) %>% 
+  mutate(Percentage_del = n/total_n*100)
+
+Percentage_del_SIFT %>%
+  ggplot(aes(x= gene, y= Percentage_del, fill= gene))+
+  geom_col()
+  
+
+
+```
+
+
+
+
+##On the PolyPhen column, we removed the brackets so that R will be able to read ( it is hard to read categorical and numerical data at the same time, we need to move into one variable), into two column the polyphen_category and polyphen_score
+
+```{r}
+VEP_results <- VEP_results %>% 
+  separate(PolyPhen,into = c("PolyPhen_category", "PolyPhen_score"),
+           sep = "\\(") %>% 
+  mutate(across(PolyPhen_score, ~as.numeric(gsub("\\)", "", .x))))
+```
+
+## Group by PolyPhen, how many we benign, possibly damaging and probably damaging. Make the bar graph based on the results you got.
+```{r}
+PolyPhen <- VEP_results %>% group_by(PolyPhen_category) %>% count()
+
+PolyPhen %>%
+  ggplot(aes(x= PolyPhen_category, y= n, fill= PolyPhen_category))+
+  geom_col()
+```
+
+##The previous  gene table is combined with the Polyphen_category, which genes have the highest percentage of benign SNP
+```{r}
+Percentage_benign_PolyPhen<- VEP_results %>%
+  rename(gene = SYMBOL) %>% 
+  group_by(gene, PolyPhen_category) %>% 
+  count() %>% 
+  filter(PolyPhen_category == "benign") %>% 
+  inner_join(genes) %>% 
+  select(gene, total_n, PolyPhen_category, n) %>% 
+  arrange(desc(n)) %>% 
+  mutate(Percentage_benign_PolyPhen = n/total_n*100)
+Percentage_benign_PolyPhen %>%
+ggplot(aes(x= gene, y= Percentage_benign_PolyPhen, fill= gene))+
+  geom_col()
+  
+```
+
+
+##Save the table(results) for PolyPhen_category
+
+```{r}
+#write.csv(PolyPhen, file= "PolyPhen_caterory.csv", quote = FALSE, row.names= FALSE)
+```
+
+## Phenotypes, calculate how many variants are available for each phenotype.
+```{r}
+Phenotype<- VEP_results_pheno %>% group_by(pheno_consolidated) %>% count()
+
+Phenotype %>% 
+  ggplot(aes(x= pheno_consolidated, y= n, fill= pheno_consolidated))+
+  geom_col()
+```
+
+##Save the table for phenotypes
+```{r}
+#write.csv(Phenotype, file= "Pheno_consolidated.csv", quote = FALSE, row.names = FALSE)
+```
+
+##combined the gene symbol and phenotype column together, we want to see how many many phenotypes are associated per gene. 
+```{r}
+
+plotdta<-VEP_results_pheno %>% 
+  inner_join(
+    VEP_results %>% 
+               select(X.Uploaded_variation, SYMBOL)
+    )
+
+plotdta<-plotdta %>% 
+  group_by(SYMBOL, pheno_consolidated) %>% 
+  count()
+  
+plotdta %>% 
+  ggplot(aes(SYMBOL, n, fill = SYMBOL))+
+  geom_col()+
+  facet_wrap(~pheno_consolidated, scales = "free")
+
+```
+
+
+```{r}
+plotdta<-VEP_results_pheno %>% 
+  inner_join(
+    VEP_results %>% 
+               select(X.Uploaded_variation, SYMBOL, Consequence)
+    )
+plotdta
+plotdta<-plotdta %>% 
+  group_by(SYMBOL) %>% 
+  count(name = "total") %>% 
+  inner_join(
+plotdta %>% 
+  group_by(SYMBOL, Consequence) %>% 
+  count()) %>% 
+  mutate(consequence_perc = n/total*100) %>% 
+  inner_join(plotdta %>% 
+               select(X.Uploaded_variation, pheno_consolidated))
+
+
+plotdta %>% 
+  ggplot(aes(SYMBOL, consequence_perc, fill = Consequence))+
+  geom_col()+
+  facet_wrap(~pheno_consolidated, scales = "free")
+
+```
+
