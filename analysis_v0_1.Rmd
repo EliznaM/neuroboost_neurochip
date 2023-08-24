@@ -6,7 +6,7 @@ editor_options:
   chunk_output_type: console
 ---
 
-# List of PD gene of Neuro Booster array.
+# Neuro Booster
 
 ```{r}
 library(tidyverse)
@@ -14,11 +14,14 @@ library(knitr)
 library(kableExtra)
 ```
 
-##load in data
+## load in data
 
 ```{r}
-data <- read_csv("data/pd_gene_anno.csv")
+data_nb <- read_csv("data/pd_gene_anno_edited.csv")
 #VEP_results <- read.delim("VEP_results.txt")
+
+data_nc <- readxl::read_xlsx("data/NeuroChip_PD_variants.xlsx")
+
 ```
 
 ## Clean VEP results
@@ -28,10 +31,22 @@ file_path <- "data/Vep_results_neuroboost_21-08-2023.txt"
 chip <- "nb"
 source("prep_VEP_results_v0_2.R") # Elizna script
 
+file_path <- "data/Neurochip_VEPout.txt"
+chip <- "nc"
+source("prep_VEP_results_v0_2.R") # Elizna script
 
+
+# neuroboost
 VEP_results_nb <- read_rds("rds/VEP_results_nb.rds")
 VEP_results_pheno_nb <- read_rds("rds/VEP_results_pheno_nb.rds")
 VEP_results_AF_nb <- read_rds("rds/VEP_results_AF_nb.rds")
+
+
+# neurochip
+VEP_results_nc <- read_rds("rds/VEP_results_nc.rds")
+VEP_results_pheno_nc <- read_rds("rds/VEP_results_pheno_nc.rds")
+VEP_results_AF_nc <- read_rds("rds/VEP_results_AF_nc.rds")
+
 
 VEP_results %>% 
   filter(!str_detect(Existing_variation, X.Uploaded_variation))
@@ -39,8 +54,8 @@ VEP_results %>%
 # VEP results has rsids that were not in the input
 # filter out
 
-data %>% 
-  select(location_data = `Genomic coordinates (GRCh38)`, 
+data_nb %>% 
+  select(location = `Genomic coordinates (GRCh38)`, 
          dbsnp) %>% 
   full_join(VEP_results_nb %>% 
               select(dbsnp = X.Uploaded_variation)) %>% 
@@ -48,7 +63,7 @@ data %>%
   arrange(dbsnp) %>% 
   print(n = 100)
 
-VEP_results_nb <- data %>% 
+VEP_results_nb <- data_nb %>% 
   select(dbsnp) %>% 
   filter(!is.na(dbsnp)) %>% 
   distinct() %>% 
@@ -72,17 +87,17 @@ VEP_results_nb <- VEP_results_pheno_nb %>%
 
 # compare in data
 
-unique(data$`Disease/Phenotype`)
+unique(data_nb$`Disease/Phenotype`)
 x <- c("parkinson disease", "parkinsons disease")
 
-data <- data %>% 
+data <- data_nb %>% 
   mutate(across(`Disease/Phenotype`, 
                 ~tolower(.x))) %>% 
   filter(str_detect(`Disease/Phenotype`, x[1]) |
            str_detect(`Disease/Phenotype`, x[2])) %>% 
   distinct()
   
-data %>% 
+data_nb %>% 
   left_join(VEP_results_pheno_nb %>% 
               rename(dbsnp = X.Uploaded_variation) %>% 
               filter(pheno_consolidated %in% c("park_dementia_synd",
@@ -97,51 +112,51 @@ data %>%
 ##change column names, column 1 and column 4
 
 ```{r}
-colnames(data)[1] <- "location"
+colnames(data_nb)[1] <- "location"
 
-colnames(data)[4] <- "gene"
+colnames(data_nb)[4] <- "gene"
 
-data %>% 
+data_nb %>% 
   group_by(location) %>% 
   count() %>% 
   filter(n != 1) %>% 
-  inner_join(data)
+  inner_join(data_nb)
 
 # remove phenotype column for now
 
-data_pheno <- data %>% 
+data_nb_pheno <- data_nb %>% 
   select(location, dbsnp, `Disease/Phenotype`)
 
-data <- data %>% 
+data_nb <- data_nb %>% 
   select(-`Disease/Phenotype`) %>% 
   distinct()
 
 # some rows have no location - exclude
 
-data <- data %>% 
+data_nb <- data_nb %>% 
   filter(!is.na(location))
 
 # some rsids have a duplicate row with NA - remove
 
-tmp <- data %>% 
+tmp <- data_nb %>% 
   group_by(location) %>% 
   count() %>% 
   filter(n != 1) %>% 
-  inner_join(data) %>% 
+  inner_join(data_nb) %>% 
   filter(is.na(dbsnp))
 
-data <- data %>% 
+data_nb <- data_nb %>% 
   anti_join(tmp)
 
-# data now has no duplicates
-data
+# data_nb now has no duplicates
+data_nb
 
 ```
 
 ##split chromosomes into chromosome number
 
 ```{r}
-data <- data %>% mutate(chr_num = str_extract(location, "chr[A-Za-z0-9]{1,2}"))
+data_nb <- data_nb %>% mutate(chr_num = str_extract(location, "chr[A-Za-z0-9]{1,2}"))
 
 ```
 
@@ -149,7 +164,7 @@ data <- data %>% mutate(chr_num = str_extract(location, "chr[A-Za-z0-9]{1,2}"))
 
 ```{r}
 # all snps in data
-grp <- data %>% group_by(chr_num) %>% count()
+grp <- data_nb %>% group_by(chr_num) %>% count()
 
 lvls <- paste("chr", 1:22, sep = "")
 lvls <- c(lvls, "chrX")
@@ -163,7 +178,7 @@ grp %>%
 
 # only snps with rsids 
 
-grp2 <- data %>% 
+grp2 <- data_nb %>% 
   filter(!is.na(dbsnp)) %>% 
   group_by(chr_num) %>% count()
 
@@ -184,7 +199,7 @@ grp2 %>%
 ```{r}
 
 # all snps in data
-genes <- data %>% group_by(gene) %>% count()
+genes <- data_nb %>% group_by(gene) %>% count()
 
 genes %>%
   ggplot(aes(x= gene, y= n)) +
@@ -237,7 +252,7 @@ genes %>%
 
 ```{r}
 
-data %>% 
+data_nb %>% 
   group_by(!is.na(dbsnp)) %>% 
   count()
 
@@ -520,7 +535,7 @@ VEP_results_AF_nb <- VEP_results_AF_nb %>%
 
 
 
-## 
+# NeuroChip 
 
 
 
