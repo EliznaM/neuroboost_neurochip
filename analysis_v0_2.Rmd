@@ -6,7 +6,7 @@ editor_options:
   chunk_output_type: console
 ---
 
-# Neuro Booster
+# Neuro Booster, after the installation of packages, we loaded the libraries
 
 ```{r}
 library(tidyverse)
@@ -14,17 +14,17 @@ library(knitr)
 library(kableExtra)
 ```
 
-## load in data
+## load in data generated from two genotying arrays ( Neuro Booster and NeuroChip arrays). Neuro Booster contains 1021 variants while the NeuroChip consists of 364 variants.
 
 ```{r}
-data_nb <- read_csv("data/pd_gene_anno_edited.csv")
+data_nb <- read_csv2("data/pd_gene_anno_edited.csv")
 #VEP_results <- read.delim("VEP_results.txt")
 
 data_nc <- readxl::read_xlsx("data/NeuroChip_PD_variants.xlsx")
 
 ```
 
-## Clean VEP results
+## Clean VEP results,sum variants are duplicated therefore we need to clean all the duplicates that are present
 
 ```{r results='hide'}
 file_path <- "data/Vep_results_neuroboost_21-08-2023.txt"
@@ -36,13 +36,13 @@ chip <- "nc"
 source("prep_VEP_results_v0_2.R") # Elizna script
 
 
-# neuroboost
+# Neuro Booster VEP output results. We separated phenotype and allele frequency columns because of missing spaces (dash)
 VEP_results_nb <- read_rds("rds/VEP_results_nb.rds")
 VEP_results_pheno_nb <- read_rds("rds/VEP_results_pheno_nb.rds")
 VEP_results_AF_nb <- read_rds("rds/VEP_results_AF_nb.rds")
 
 
-# neurochip
+# NeuroChip VEP output results. We separated the phenotype and allele frequency columns because of missing spaces and that lead to have many duplicates
 VEP_results_nc <- read_rds("rds/VEP_results_nc.rds")
 VEP_results_pheno_nc <- read_rds("rds/VEP_results_pheno_nc.rds")
 VEP_results_AF_nc <- read_rds("rds/VEP_results_AF_nc.rds")
@@ -51,7 +51,7 @@ VEP_results_AF_nc <- read_rds("rds/VEP_results_AF_nc.rds")
 VEP_results %>% 
   filter(!str_detect(Existing_variation, X.Uploaded_variation))
 
-# VEP results has rsids that were not in the input
+# VEP results has rsIDs that were not in the input
 # filter out
 
 data_nb %>% 
@@ -109,7 +109,7 @@ data_nb %>%
        
 ```
 
-##change column names, column 1 and column 4
+##Change column names, column 1 and column 4. Since from the original dataset the names of the columns were long therefore it will be hard to remember.
 
 ```{r}
 colnames(data_nb)[1] <- "location"
@@ -122,7 +122,7 @@ data_nb %>%
   filter(n != 1) %>% 
   inner_join(data_nb)
 
-# remove phenotype column for now
+# Remove phenotype column for now
 
 data_nb_pheno <- data_nb %>% 
   select(location, dbsnp, `Disease/Phenotype`)
@@ -131,12 +131,12 @@ data_nb <- data_nb %>%
   select(-`Disease/Phenotype`) %>% 
   distinct()
 
-# some rows have no location - exclude
+# Some rows have no location - exclude
 
 data_nb <- data_nb %>% 
   filter(!is.na(location))
 
-# some rsids have a duplicate row with NA - remove
+# some rsID have a duplicate row with NA - remove
 
 tmp <- data_nb %>% 
   group_by(location) %>% 
@@ -153,96 +153,116 @@ data_nb
 
 ```
 
-##split chromosomes into chromosome number
+##Split chromosomes into chromosome number, since we are given the chromosome number and its position/locaation.
 
 ```{r}
-data_nb <- data_nb %>% mutate(chr_num = str_extract(location, "chr[A-Za-z0-9]{1,2}"))
+data_nb <- data_nb %>% mutate(location = str_extract(location, "chr[A-Za-z0-9]{1,2}"))
 
 ```
 
-##group by chromosomes, calculate how many variants are presents per chromosome.Since we have different chromosomes and they are not arranged so we need to arrange them in ascending order, for the proper or representative bar graph.Additional heading of the graph using the labs.Thus in order to have different colors you must use the code, fill.
+##Group by chromosomes, calculate how many variants are presents per chromosome.Since we have different chromosomes and they are not arranged so we need to arrange them in ascending order, for the proper or representative bar graph.Additional heading of the graph using the labs.Thus in order to have different colors you must use the code, fill.
 
 ```{r}
-# all snps in data
-grp <- data_nb %>% group_by(chr_num) %>% count()
+# All SNPs in data
+grp <- data_nb %>% group_by(location) %>% count()
 
 lvls <- paste("chr", 1:22, sep = "")
 lvls <- c(lvls, "chrX")
 
-grp$chr_num <- factor(grp$chr_num, levels = lvls)
-
+grp$location <- factor(grp$location, levels = lvls)
+ 
 grp %>% 
-  ggplot(aes(x = chr_num, y = n, fill= chr_num))+
-  geom_col() +
-  labs(title = "Number of variants per chromosome", x= "chr_num", y= "n")
+  ggplot(aes(x = reorder(location,-n), y = n))+
+  geom_col(stat= "identity", color= "black", fill= "green", width= 0.40) +
+  labs(title = "Number of variants per chromosome", x= "Chromosome number ", y= "Number of variants")
 
-# only snps with rsids 
+# Only SNPs with rsIDs 
 
 grp2 <- data_nb %>% 
   filter(!is.na(dbsnp)) %>% 
-  group_by(chr_num) %>% count()
+  group_by(location) %>% count()
 
 lvls <- paste("chr", 1:22, sep = "")
 lvls <- c(lvls, "chrX")
 
-grp2$chr_num <- factor(grp2$chr_num, levels = lvls)
+grp2$location <- factor(grp2$location, levels = lvls)
 
 grp2 %>% 
-  ggplot(aes(x = chr_num, y = n, fill= chr_num))+
-  geom_col() +
-  labs(title = "Number of variants per chromosome, missing RSIDs excluded", x= "chr_num", y= "n")
+  ggplot(aes(x = reorder(location,-n), y = n))+
+  geom_col(stat= "identity", color= "black", fill= "green", width = 0.40) +
+  labs(title = "Number of variants per chromosome, missing RSIDs excluded", x= "Chromosome number", y= "Number of variants")
 
 ```
 
-##group by genes, how many variants per gene.The LRRK2 shows a highest variant among other genes.
+##Group by genes, how many variants per gene.The LRRK2 shows a highest variant among other genes. Arrange the genes based on their highest number of variants, so that we can have the good bar graph.
 
 ```{r}
 
-# all snps in data
+# All SNPs in data
 genes <- data_nb %>% group_by(gene) %>% count()
 
 genes %>%
-  ggplot(aes(x= gene, y= n)) +
-  geom_col()+
-  theme(axis.text.x = element_text(angle = 90, vjust  = 0.5, hjust = 1, size = 6))
+  ggplot(aes(x= reorder(gene,-n), y= n)) +
+  geom_col(stat= "identity", color= "black", fill= "green", width = 0.40)+
+  theme(axis.text.x = element_text(angle = 90, vjust  = 0.5, hjust = 1, size = 6))+
+  labs(title = "Number of variants per gene",x= "Gene symbol", y= "Number of variants")
 
-# missing rsids excluded
+# Missing rsID excluded
+
+genes2 <- data_nb %>% 
+  filter(!is.na(dbsnp)) %>% 
+  group_by(gene) %>% count()
+
+genes2 %>% 
+  ggplot(aes(x = reorder(gene, -n), y = n))+
+  geom_col(stat= "identity", color= "black", fill= "green", width = 0.40) +
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.9, hjust = 0.9,size = 6))+
+  labs(title = "Number of variants per chromosome, missing RSIDs excluded", x= "Gene symbol", y= "Number of variants")
+
 
 
 
 ```
 
-##make a table of different chromosome types
+##Make a table of different chromosome types. Arrange the chromosomes based on their highest variants.
+
 
 ```{r}
 
-# all snps
+# All SNPs
 grp  %>% 
+  arrange(desc(n)) %>% 
   kable(caption = "All variants") %>% 
   kable_styling(full_width = FALSE, position = "left")
 
 
-# only non-missing rsids
+# Only non-missing rsIDs
 
 grp2  %>% 
+  arrange(desc(n)) %>% 
   kable(caption = "Only variants with RSIDs") %>% 
   kable_styling(full_width = FALSE, position = "left")
 
 ```
 
-##make a table of different gene types
+##Make a table of different gene types. Arrange the genes based on their highest variants.
+
 
 ```{r}
 
-# all
+# All
 
 genes %>%
   arrange(desc(n)) %>% 
-  kable() %>% 
+  kable(caption = "all variants") %>% 
   kable_styling(full_width = FALSE, position = "left")
 
-# only non-missing rsids
+# Only non-missing rsIDs
 
+genes2 %>%
+   arrange(desc(n)) %>% 
+  kable(caption = "Only variants with rsID") %>%
+  kable_styling(full_width = FALSE, position = "left")
 
 
 
@@ -258,7 +278,7 @@ data_nb %>%
 
 ```
 
-Imported only SNPs with rsids to VEP.
+Imported only SNPs with rsIDs to VEP.
 
 
 ##Import the vep_result on R and make some summaries(tables and bar graphs)
@@ -269,9 +289,9 @@ Imported only SNPs with rsids to VEP.
 biotype <- VEP_results_nb %>% group_by(BIOTYPE) %>% count()
 
 biotype %>% 
-  ggplot(aes(x = BIOTYPE, y = n, fill= BIOTYPE))+
-  geom_col() +
-  labs(title = "Number of variants per Biotype", x= "BIOTYPE", y= "n")
+  ggplot(aes(x = reorder(BIOTYPE,-n), y = n))+
+  geom_col(stat= "identity", color= "black", fill= "green", width=0.40) +
+  labs(title = "Number of variants per Biotype", x= "BIOTYPE", y= "Number of variants")
 
 ```
 
@@ -279,56 +299,61 @@ biotype %>%
 
 ```{r}
 biotype %>%
-  kable() %>% 
+  arrange(desc(n)) %>% 
+  kable(caption = "Number of variants per biotype") %>% 
   kable_styling(full_width = FALSE, position = "left")
 
 ```
 
-## Group by consequence
+## Group by consequence. Make summarries using the bar graph. Arrange the bars from the maximum to the minimum variant number.
 
 ```{r}
 consequence <- VEP_results_nb %>% group_by(Consequence) %>% count()
 
+
 # TO DO: change order for this graph to have bars from tall to short
 consequence %>%
-  ggplot(aes(x= Consequence, y= n))+
-  geom_col()+
+  ggplot(aes(x= reorder(Consequence, -n), y= n))+
+  geom_col(stat= "identity", color= "black", fill= "green", width = 0.40)+
+  labs(title = "Number of variants per consequences", x= "Consequences features", y= "Number of variants")+
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size= 6))
 
 ```
 
-##Save table for consequence
+##Save table for consequence.  Arrange the table from high to low based on the number of variants per consequence.
 
 ```{r}
 
 # TO DO: arrange table from high n to low n
 
 consequence %>%
-  kable() %>% 
+   arrange(desc(n)) %>% 
+  kable(caption = "Number of variants per consequences") %>% 
   kable_styling(full_width = FALSE, position = "left")
 
 ```
 
-##Group by IMPACT
+##Group by IMPACT. Make summarries using bar graph and arrange the bars from high to low.
 
 ```{r}
 IMPACT <- VEP_results_nb %>% group_by(IMPACT) %>% count()
 
 # TO DO: reorder bars in graph to be in order
 IMPACT %>%
-  ggplot(aes(x= IMPACT, y= n, fill= IMPACT)) +
-  geom_col() +
-  labs(title = "Number of variants in different impact", x= "IMPACT", y= "n")
+  ggplot(aes(x= reorder(IMPACT, -n), y= n)) +
+  geom_col(stat= "identity", color= "black", fill="green",width= 0.40) +
+  labs(title = "Number of variants in different impact", x= "IMPACT", y= "Number of variants")
 
 ```
 
-##Save table for impact
+##Save table for impact and arrange based on their highest number of variants.
 
 ```{r}
 # TO DO: arrange rows in correct order
 
 IMPACT %>%
-  kable() %>% 
+   arrange(desc(n)) %>% 
+  kable(caption = "Number of variants in different impact") %>% 
   kable_styling(full_width = FALSE, position = "left")
 
 ```
@@ -343,23 +368,32 @@ VEP_results_nb <- VEP_results_nb %>%
 
 ```
 
-##Group by sift. how many we tolerated and deleterouis. Make the bar graph about the results that you found.
+##Group by sift. how many we tolerated and deleterouis. Make summarries based on the results that you found using bar graph. There were missing variants thus they are represented by NA.
 
 ```{r}
 SIFT <- VEP_results_nb %>% group_by(SIFT_category) %>% count()
 
+VEP_results_nb$SIFT_category<- gsub("-", NA, VEP_results_nb$SIFT_category)
+
+
 # TO DO:  remove the bar with missing SIFT category
 
 SIFT %>%
-  ggplot(aes(x= SIFT_category, y= n, fill = SIFT_category))+
-  geom_col()
+  filter(!is.na(SIFT_category)) %>% 
+  ggplot(aes(x= reorder(SIFT_category, -n), SIFT_category, y= n, fill = SIFT_category))+
+  geom_col(stat= "identity", color= "black", fill= "green", width= 0.40)+
+  labs(title= "Number of variants per sift category", x= "Sift category", y= "Number of variants")
 
 ```
 
 ##Save the table for the Sift_categoty
 
 ```{r}
-
+SIFT %>%
+  filter(!is.na(SIFT_category)) %>% 
+  arrange(desc(n)) %>% 
+  kable(caption = "Number of variants per sift category") %>% 
+  kable_styling(full_width = FALSE, position = "left")
 ```
 
 
@@ -383,8 +417,9 @@ Percentage_del_SIFT<- VEP_results_nb %>%
   mutate(Percentage_del = n/total_n*100)
 
 Percentage_del_SIFT %>%
-  ggplot(aes(x= gene, y= Percentage_del, fill= gene))+
-  geom_col()
+  ggplot(aes(x= reorder(gene,-Percentage_del), y= Percentage_del, fill= gene))+
+  geom_col(stat= "identity", color= "black", fill= "green", width = 0.40 )+
+  labs(title = "Genes with different percentage of deleterious SNP", x= "Gene symbol", y= "Percentage of deleterious SNP")
   
 
 ```
@@ -400,15 +435,19 @@ VEP_results_nb <- VEP_results_nb %>%
 
 ```
 
-## Group by PolyPhen, how many we benign, possibly damaging and probably damaging. Make the bar graph based on the results you got.
+## Group by PolyPhen, how many we benign, possibly damaging and probably damaging. Make the bar graph based on the results you got. Remove missing dash catergory and replace by NA. Lastly arrange the bars from highest to the lowest.
 ```{r}
 PolyPhen <- VEP_results_nb %>% group_by(PolyPhen_category) %>% count()
-
 # TO DO remove missing category bar
 
+VEP_results_nb$PolyPhen_category<- gsub("-", NA, VEP_results_nb$PolyPhen_category)
+
+
 PolyPhen %>%
-  ggplot(aes(x= PolyPhen_category, y= n, fill= PolyPhen_category))+
-  geom_col()
+  filter(!is.na(PolyPhen_category)) %>% 
+  ggplot(aes(x= reorder(PolyPhen_category, -n), y= n))+
+  geom_col(stat= "identity", color= "black", fill= "green", width= 0.40 )+
+  labs(title = "Number of variants per Polyphen caterory", x ="Polyphen category", y ="Number of variants")
 
 ```
 
@@ -429,19 +468,45 @@ Percentage_benign_PolyPhen<- VEP_results_nb %>%
   mutate(Percentage_benign_PolyPhen = n/total_n*100)
 
 Percentage_benign_PolyPhen %>%
-ggplot(aes(x= gene, y= Percentage_benign_PolyPhen, fill= gene))+
-  geom_col()
+ggplot(aes(x= reorder(gene, -Percentage_benign_PolyPhen), y= Percentage_benign_PolyPhen))+
+  geom_col(stat="identity", color= "black", fill= "green", width = 0.40)+
+  labs(title = "Percentage of benign SNP in different genes", x="Gene symbol", y= "Percentage of benign SNP")
   
 # TO DO:  add a graph with the probably damaging variants
+
+#The previous gene table is combined the polyphen category, which genes have the highest percentage of probably damaging
+
+Percentage_probably_damaging<- VEP_results_nb %>%
+  rename(gene = SYMBOL) %>% 
+  group_by(gene) %>% 
+  count(name = "total_n") %>%        #?????????????????????
+  inner_join(VEP_results_nb %>% 
+               rename(gene = SYMBOL) %>% 
+  group_by(gene, PolyPhen_category) %>% 
+  count()) %>% 
+  filter(PolyPhen_category == "probably_damaging") %>% 
+  select(gene, total_n, PolyPhen_category, n) %>% 
+  arrange(desc(n)) %>% 
+  mutate(Percentage_probably_damaging = n/total_n*100)
+
+
+Percentage_probably_damaging %>%
+ggplot(aes(x= reorder(gene, -Percentage_probably_damaging), y= Percentage_probably_damaging))+
+  geom_col(stat="identity", color= "black", fill= "green", width = 0.40)+
+  labs(title = "Percentage of probably damaging SNP in different genes", x="Gene symbol", y= "Percentage of probably damaging SNP")
 
 
 ```
 
 
-##Save the table(results) for PolyPhen_category
+##Save the table(results) for PolyPhen_category. Arrange the polyphen category based on the number of variants that are present on each category.
 
 ```{r}
-
+PolyPhen %>%
+  filter(!is.na(PolyPhen_category)) %>%
+  arrange(desc(n)) %>% 
+  kable(caption = "Number of variants per polyphen category") %>% 
+  kable_styling(full_width = FALSE, position = "left")
 ```
 
 ## Phenotypes, calculate how many variants are available for each phenotype.
@@ -450,14 +515,18 @@ ggplot(aes(x= gene, y= Percentage_benign_PolyPhen, fill= gene))+
 Phenotype<- VEP_results_pheno_nb %>% group_by(pheno_consolidated) %>% count()
 
 Phenotype %>% 
-  ggplot(aes(x= pheno_consolidated, y= n, fill= pheno_consolidated))+
-  geom_col()
+  ggplot(aes(x= reorder(pheno_consolidated,-n), y= n, fill= pheno_consolidated))+
+  geom_col(stat= "identity", color= "black", fill= "green", width = 0.40)+
+  labs(title = "Number of variants present per phenotype", x="Types of phenotypes", y= "Number of variants")
 
 ```
 
 ##Save the table for phenotypes
 ```{r}
-
+Phenotype %>% 
+  arrange(desc(n)) %>% 
+  kable(caption = "Number of variants per phenotype") %>% 
+  kable_styling(full_width = FALSE, position = "left")
 ```
 
 ##combined the gene symbol and phenotype column together, we want to see how many many phenotypes are associated per gene. 
@@ -467,22 +536,75 @@ Phenotype %>%
 plotdta <- VEP_results_pheno_nb %>% 
   inner_join(
     VEP_results_nb %>% 
-               select(X.Uploaded_variation, SYMBOL)
-    )
+               select(X.Uploaded_variation, SYMBOL) )
 
 plotdta <- plotdta %>% 
   group_by(SYMBOL, pheno_consolidated) %>% 
   count()
   
+plotdta$SYMBOL<- gsub("-", NA, plotdta$SYMBOL)
+
 # TO DO:  remove bars with missing gene
 
 plotdta %>% 
-  ggplot(aes(SYMBOL, n, fill = SYMBOL))+
-  geom_col()+
-  facet_wrap(~pheno_consolidated, scales = "free")
+  filter(!is.na(SYMBOL)) %>%
+  ggplot(aes(x= reorder(SYMBOL, -n), y= n))+
+  geom_col(stat= "identity", color= "black", fill= "green", width = 0.40)+
+  facet_wrap(~pheno_consolidated, scales = "free")+
+  labs(title = "Different phenotypes associated per gene", x= "Gene symbol", y= "Number of phenotypes")
 
 ```
 
+##Group all genes that have pathagenic variants together, depending on the cut-off that we have choosen (cut-off is 30, meaning those variants  above 30 are pathogenic and below 30 are susceptibility variants). Arrange the gene symbols based on their highest value of variant.Draw the bar graph of each variant type.
+
+
+```{r}
+#For pathogenic variants
+Pathogenic_variants<- VEP_results_nb %>% 
+  filter(CADD_PHRED >=20) %>% 
+  group_by(SYMBOL) %>% 
+  count()
+  
+Pathogenic_variants %>% 
+  ggplot(aes(x= reorder(SYMBOL,-n), y= n))+
+  geom_col(stat= "identity", color= "black", fill= "green", width = 0.40)+
+  labs(title = "Genes with pathogenic variants", x= "Gene symbol", y= "Number of variants")
+
+#For susceptibility variants
+Susceptibility_variants<- VEP_results_nb %>% 
+  filter(CADD_PHRED <20) %>% 
+  group_by(SYMBOL) %>% 
+  count()
+
+Susceptibility_variants %>% 
+  ggplot(aes(x= reorder(SYMBOL, -n), y= n, fill))+
+  geom_col(stat= "identity", color= "black", fill= "green", width = 0.40)+
+  labs(title = "Genes with susceptibility variants", x= "Gene symbol", y= "Number of variants")
+
+```
+
+#Save the table for pathogenic variants. Arrange the genes based on their highest variant numbers.
+
+```{r}
+Pathogenic_variants %>% 
+  arrange(desc(n)) %>% 
+  kable(caption = " Genes with pathogenic variants") %>% 
+  kable_styling(full_width = FALSE, position = "left")
+```
+
+# Save the table for susceptibility variants. Arrange the genes based on their highest variant numbers.
+
+```{r}
+Susceptibility_variants %>% 
+  arrange(desc(n)) %>% 
+  kable(caption = "Genes with susceptibility variants") %>% 
+  kable_styling(full_width = FALSE, position = "left")
+
+```
+
+
+
+??????
 
 ```{r}
 
@@ -511,13 +633,16 @@ plotdta %>%
 
 ```
 
+
 ## Allele frequencies
+#Allele frequency. Make dashes NA, for all columns. Summarries based on the 1000 genome and gnomADg. Create the graph that show the allele frequency for African population and all other populations( grouped together, eg. Asian, American, Europen).
+
 
 ```{r}
-# make dashes NA
+# make dashes NA, for all columns.
 
 VEP_results_AF_nb <- VEP_results_AF_nb %>% 
-  mutate(across(everything(), ~ifelse(.x == "-", NA, .x)))
+  mutate(across(everything(), ~ifelse(.x == "-", NA, .x))) 
 
 VEP_results_AF_nb <- VEP_results_AF_nb %>% 
   pivot_longer(-c(X.Uploaded_variation, Location, Allele, Codons),
@@ -528,17 +653,585 @@ VEP_results_AF_nb <- VEP_results_AF_nb %>%
 VEP_results_AF_nb <- VEP_results_AF_nb %>% 
   mutate(af_source = case_when(str_detect(key, "gnomADe") ~ "gnomADe",
                                str_detect(key, "gnomADg") ~ "gnomADg",
-                               TRUE ~ "g1000")) 
+                               TRUE ~ "g1000")) %>% 
+  filter(af_source != "gnomADe")
+
+
+
+```
+
+#Separated the data betweeen the g1000 and gnomADg. All Non- African population are being replaced by the word "other". We have filtered the rows that we do not need using the filter function and lastly we grouped by, for the purpose of summarising.
+
+```{r}
+# filter out all global AFs and af_source
+# Make a new column that has AFR if african, or OTHER if anything else
+
+g1000_nb <- VEP_results_AF_nb %>% 
+  filter(key !="AF"& af_source == "g1000") %>% 
+  mutate(african = case_when(str_detect(key, "AFR_AF") ~ "AFR_AF",
+                               str_detect(key, "AMR_AF") ~ "Other",
+                                str_detect(key, "EAS_AF") ~ "Other",
+                                str_detect(key, "EUR_AF") ~ "Other",
+                             str_detect(key, "SAS_AF") ~ "Other")) 
+
+
+gnomad_nb <- VEP_results_AF_nb %>% 
+  filter(key != "gnomADg_AF" & af_source == "gnomADg") %>% 
+  mutate(african = case_when(str_detect(key, "gnomADg_AFR_AF") ~ "gnomADg_AFR_AF",
+                               str_detect(key, "gnomADg_AMR_AF") ~ "gnomADg_Other",
+                                str_detect(key, "gnomADg_EAS_AF") ~ "gnomADg_Other",
+                                str_detect(key, "gnomADg_AMI_AF") ~ "gnomADg_Other",
+                             str_detect(key, "gnomADg_SAS_AF") ~ "gnomADg_Other",
+                             str_detect(key, "gnomADg_ASJ_AF") ~ "gnomADg_Other",
+                             str_detect(key, "gnomADg_FIN_AF") ~ "gnomADg_Other",
+                             str_detect(key, "gnomADg_MID_AF") ~ "gnomADg_Other",
+                             str_detect(key, "gnomADg_NFE_AF") ~ "gnomADg_Other",
+                             str_detect(key, "gnomADg_OTH_AF") ~ "gnomADg_Other")) 
+
+
+
+# Group by rsID and new column and calculate mean for each using the summarise.
+
+g1000_nb$value <- as.numeric(g1000_nb$value)
+
+plotdta_g1000<- g1000_nb %>% 
+  group_by(X.Uploaded_variation, african) %>% 
+  summarise(mean_AF = mean(value)) %>% 
+  ungroup()
+
+ plotdta_g1000 %>% 
+  pivot_wider(names_from = african, values_from = mean_AF) %>% 
+  filter(AFR_AF == 0 & Other == 0)
+ 
+
+summary(plotdta_g1000$mean_AF)
+
+lvls <- plotdta_g1000 %>%
+  filter(african == "AFR_AF") %>% 
+  arrange(desc(mean_AF)) %>% 
+  pull(X.Uploaded_variation)
+
+plotdta_g1000$X.Uploaded_variation <- factor(plotdta_g1000$X.Uploaded_variation,
+                                       levels = lvls)
+
+plotdta_g1000 %>% 
+  mutate(above_p75 = ifelse(mean_AF> 0.01014, "Top 25%", "Bottom 75%")) %>% 
+  ggplot(aes(x= X.Uploaded_variation, y= mean_AF, group= african, color= african))+
+  geom_line(alpha= 0.7)+
+  facet_wrap(~mean_AF > 0.01014, scales= "free")
+
+plotdta_g1000 %>% 
+  mutate(above_p75 = ifelse(mean_AF >0.01014, "Top 25%", "Bottom 75%") )%>% 
+  ggplot(aes( y= mean_AF, x= african, color= african))+
+  geom_boxplot()+
+  facet_wrap(~above_p75, scales= "free")
+
+  
+#Group by rsId and new column and calculate mean for each.
+
+gnomad_nb$value<- as.numeric(gnomad_nb$value)
+
+plotdta <- gnomad_nb %>% 
+  group_by(X.Uploaded_variation, african) %>% 
+  summarise(mean_AF = mean(value)) %>% 
+  ungroup() 
+
+summary(plotdta$mean_AF)
+
+lvls <- plotdta %>%
+  filter(african == "gnomADg_AFR_AF") %>% 
+  arrange(desc(mean_AF)) %>% 
+  pull(X.Uploaded_variation)
+
+plotdta$X.Uploaded_variation <- factor(plotdta$X.Uploaded_variation,
+                                       levels = lvls)
+
+plotdta %>% 
+  ggplot(aes(x= X.Uploaded_variation, y= mean_AF, group= african, color= african))+
+  geom_line(alpha= 0.7)+
+  facet_wrap(~mean_AF >0.0004758, scales= "free")
+
+
+plotdta %>% 
+  mutate(above_p75 = ifelse(mean_AF >0.0004758, "Top 25%", "Bottom 75%") )%>% 
+  ggplot(aes( y= mean_AF, x= african, color= african))+
+  geom_boxplot()+
+  facet_wrap(~above_p75, scales= "free")
+
+```
+
+
+##Tble for plotdta_g1000
+
+```{r}
+plotdta_g1000 %>% 
+  arrange(desc(mean_AF)) %>% 
+  kable() %>% 
+  kable_styling(full_width = FALSE, position = "left")
+  
+```
+
+
+
+
+# Created the new column on the plotdta, we used the function case_when. We want to record  when the  african allele frequency is greater/ equall too  allele frequency of other  population, the new column must record as "African". When it is less than, it must record as other. In short we were hoping to count how many times does African allele frequency is greater or equall too allele frequency of non- African population(other) and vice verse.
+
+```{r}
+x<- plotdta_g1000 %>% 
+  pivot_wider(names_from = african, values_from = mean_AF) %>% 
+  count() %>% 
+  pull(n)
+  
+
+plotdta_g1000 %>% 
+  pivot_wider(names_from = african, values_from = mean_AF) %>% 
+  mutate(newcolumn =case_when(AFR_AF>=Other ~ "African", AFR_AF<Other ~ "Other")) %>% 
+  group_by(newcolumn) %>% 
+  count() %>% 
+  ungroup() %>% 
+  mutate(Percentage= n/x*100)
+
+
+```
+
+
+
+# Created the new column on the plotdta, we used the function case_when. We want to separate when the gnomADg african allele frequency is greater/ equall too gnomADg  allele frequency of other  population, the new column must record as "African". When it is less than, it must record as other. In short we were hoping to count how many times does African allele frequency is greater or equall too allele frequency of non- African population(other) and vice verse.
+```{r}
+x <- plotdta %>% 
+  pivot_wider(names_from = african, values_from = mean_AF) %>% 
+  count() %>% 
+  pull(n)
+
+plotdta %>% 
+  pivot_wider(names_from = african, values_from = mean_AF) %>% 
+  mutate(New_column= case_when (gnomADg_AFR_AF>= gnomADg_Other ~ "African", 
+         gnomADg_AFR_AF< gnomADg_Other ~ "Other")) %>% 
+  group_by(New_column) %>% 
+  count() %>% 
+  ungroup() %>% 
+  mutate(percentage = n/x*100)
+
+
+
+
+```
+
+#On VEP output for Neuro Booster array, Draw the line graph using the CADD score cut-off of 20 for g1000
+
+```{r}
+VEP_results_nb %>% 
+  filter(CADD_PHRED >= 20) %>% 
+  select(X.Uploaded_variation) %>% 
+  inner_join(plotdta_g1000) %>% 
+  #mutate(above_p75 = ifelse(mean_AF> 0.001744, "Top 25%", "Botttom 75%")) %>% 
+  ggplot(aes(x= X.Uploaded_variation, y= mean_AF, group= african, color= african))+
+  geom_line(alpha= 0.7)
+
+VEP_results_nb %>% 
+  filter(CADD_PHRED<20) %>% 
+  select(X.Uploaded_variation) %>% 
+  inner_join(plotdta_g1000) %>% 
+  ggplot(aes(x= X.Uploaded_variation, y= mean_AF, group= african, color= african))+
+  geom_line(alpha =0.7)
+
+
+```
+
+#On VEP output for Neuro Booster array, draw the line graph using the CADD score  cut-off of 20 for gnomad
+```{r}
+VEP_results_nb %>% 
+  filter(CADD_PHRED>=20) %>% 
+  select(X.Uploaded_variation) %>% 
+  inner_join(plotdta) %>% 
+  ggplot(aes(x= X.Uploaded_variation, y= mean_AF, group= african, color= african))+
+  geom_line(alpha= 0.7)
+ 
+
+VEP_results_nb %>% 
+  filter(CADD_PHRED<20) %>% 
+  select(X.Uploaded_variation) %>% 
+  inner_join(plotdta) %>% 
+  ggplot(aes(x= X.Uploaded_variation, y= mean_AF, group= african, color= african))+
+  geom_line(alpha= 0.7)
 
 ```
 
 
 
 
-# NeuroChip 
 
-hjdhj
 
+# NeuroChip dataset
+
+Imported only SNPs with rsIDs to VEP.
+
+
+##Import the vep_result on R and make some summaries(tables and bar graphs)
+##Get list of unique categories present in column biotype(can use the following code unique(name of the data $ the column name))
+
+
+#Group by biotype
+
+```{r}
+
+biotype_nc <- VEP_results_nc %>% group_by(BIOTYPE) %>% count()
+
+biotype_nc %>% 
+  ggplot(aes(x = reorder(BIOTYPE,-n), y = n))+
+  geom_col(stat= "identity", color= "black", fill= "green", width=0.40) +
+  labs(title = "Number of variants per Biotype", x= "BIOTYPE", y= "Number of variants")
+
+
+```
+
+# Save the table for biotype_nc
+
+```{r}
+biotype_nc %>% 
+  arrange(desc(n)) %>% 
+  kable(caption = "Number of variants per biotype") %>% 
+  kable_styling(full_width = FALSE, position = "left")
+```
+
+
+# Group by consequence. Make summarries using the bar graph. Arrange the bars from the maximum to the minimum variant number.
+
+```{r}
+consequence_nc<- VEP_results_nc %>% 
+  group_by(Consequence) %>% 
+  count()
+
+consequence_nc %>% 
+  ggplot(aes(x= reorder(Consequence, -n), y= n))+
+  geom_col(stat= "identity", color= "black", fill= "green", width = 0.40)+
+  labs(title = "Number of variants per consequence", x= "Consequence feature", y= "Number of variants")
+```
+
+# Save table for consequence
+
+```{r}
+consequence_nc %>% 
+  arrange(desc(n)) %>% 
+  kable(caption = "Number of variants per consequence") %>% 
+  kable_styling(full_width = FALSE, position = "left")
+```
+
+# Group by IMPACT. Make summarries using bar graph and arrange the bars from high to low.
+
+```{r}
+impact_nc<- VEP_results_nc %>% 
+  group_by(IMPACT) %>% 
+  count()
+  
+impact_nc %>% 
+  ggplot(aes(x= reorder(IMPACT, -n), y= n))+
+  geom_col(stat= "identity", color= "black", fill= "green", width = 0.40)+
+  labs(title = "Number of variants in different impact", x= "Impact", y= "Numberof variants")
+```
+
+#  On the sift column, we removed the brackets so that R will be able to read, into two colomn the sift_category and sift_scrore.
+```{r}
+VEP_results_nc <- VEP_results_nc %>% 
+  separate(SIFT,into = c("SIFT_category", "SIFT_score"),
+           sep = "\\(") %>% 
+  mutate(across(SIFT_score, ~as.numeric(gsub("\\)", "", .x))))
+```
+
+
+# Group by sift. how many we tolerated and deleterouis. Make summarries based on the results that you found using bar graph. There were missing variants thus they are represented by NA.
+```{r}
+
+SIFT_category<- VEP_results_nc %>% 
+  group_by(SIFT_category) %>% 
+  count()
+  
+VEP_results_nc$SIFT_category<- gsub("-", NA, VEP_results_nc$SIFT_category)
+
+SIFT_category %>% 
+  filter(!is.na(SIFT_category)) %>% 
+  ggplot(aes(x= reorder(SIFT_category, -n), y= n))+
+  geom_col(stat= "identity", color= "black", fill= "green", width = 0.40)+
+  labs(title = "Number of variants per sift category", x= "Sift category", y= "Number of variants")
+
+```
+
+
+# Save table for sift category.
+
+```{r}
+SIFT_category %>% 
+filter(!is.na(SIFT_category)) %>% 
+  arrange(desc(n)) %>% 
+  kable(caption = "Number of variants per sift categor") %>% 
+  kable_styling(full_width = FALSE, position= "left")
+```
+
+
+# On the PolyPhen column, we removed the brackets so that R will be able to read ( it is hard to read categorical and numerical data at the same time, we need to move into one variable), into two column the polyphen_category and polyphen_score
+
+```{r}
+
+VEP_results_nc <- VEP_results_nc %>% 
+  separate(PolyPhen,into = c("PolyPhen_category", "PolyPhen_score"),
+           sep = "\\(") %>% 
+  mutate(across(PolyPhen_score, ~as.numeric(gsub("\\)", "", .x))))
+
+```
+
+# Group by PolyPhen, how many we benign, possibly damaging and probably damaging. Make the bar graph based on the results you got. Remove missing dash catergory and replace by NA. Lastly arrange the bars from highest to the lowest.
+```{r}
+PolyPhen_category<- VEP_results_nc %>% 
+  group_by(PolyPhen_category) %>% 
+  count()
+
+VEP_results_nc$PolyPhen_category<- gsub("-", NA, VEP_results_nc$PolyPhen_category)
+
+
+PolyPhen_category %>% 
+  filter(!is.na(PolyPhen_category)) %>% 
+  ggplot(aes(x= reorder(PolyPhen_category, -n), y= n))+
+  geom_col(stat= "identity", color= "black", fill= "green", width = 0.40)+
+  labs(title = "Number of variants per polyphen category", x= "Polyphen category", y= "Number of variants")
+
+```
+
+#Save the table(results) for PolyPhen_category. Arrange the polyphen category based on the number of variants that are present on each category.
+
+```{r}
+PolyPhen_category %>% 
+  filter(!is.na(PolyPhen_category)) %>% 
+  arrange(desc(n)) %>% 
+  kable(caption = "Number of variants per polyphen category") %>% 
+  kable_styling(full_width = FALSE, position= "left")
+  
+```
+
+
+# Phenotypes, calculate how many variants are available for each phenotype.
+
+```{r}
+Phenotype<-VEP_results_pheno_nc %>% 
+  group_by(pheno_consolidated) %>% 
+  count()
+
+Phenotype %>% 
+  ggplot(aes(x= reorder(pheno_consolidated, -n), y= n))+
+  geom_col(stat= "identity", color= "black", fill= "green", width = 0.40)+
+  labs(title = "Number of variants per phenotype", x= "Types of phenotypes", y= "Number of variants")
+
+
+```
+
+
+# Combined the gene symbol and phenotype column together, we want to see how many many phenotypes are associated per gene. 
+
+
+```{r}
+plotdta <- VEP_results_pheno_nc %>% 
+  inner_join(
+    VEP_results_nc %>% 
+               select(X.Uploaded_variation, SYMBOL) )
+
+plotdta <- plotdta %>% 
+  group_by(SYMBOL, pheno_consolidated) %>% 
+  count()
+  
+plotdta$SYMBOL<- gsub("-", NA, plotdta$SYMBOL)
+
+# TO DO:  remove bars with missing gene
+
+plotdta %>% 
+  filter(!is.na(SYMBOL)) %>%
+  ggplot(aes(x= reorder(SYMBOL, -n), y= n))+
+  geom_col(stat= "identity", color= "black", fill= "green", width = 0.40)+
+  facet_wrap(~pheno_consolidated, scales = "free")+
+  labs(title = "Different phenotypes associated per gene", x= "Gene symbol", y= "Number of phenotypes")
+
+```
+
+
+#Group all genes that have pathagenic variants together, depending on the cut-off that we have choosen (cut-off is 30, meaning those variants  above 30 are pathogenic and below 30 are susceptibility variants). Arrange the gene symbols based on their highest value of variant.Draw the bar graph of each variant type.
+
+```{r}
+#For pathogenic variants
+Pathogenic_variants<- VEP_results_nc %>% 
+  filter(CADD_PHRED >=30) %>% 
+  group_by(SYMBOL) %>% 
+  count()
+
+Pathogenic_variants %>% 
+  ggplot(aes(x= reorder(SYMBOL, -n), y= n))+
+  geom_col(stat= "identity", color= "black", fill= "green", width = 0.40)+
+  labs(title = "Genes with pathogenic variants", x= "Gene symbol", y= "Number of variants")
+
+#For susceptibility variants
+Susceptibility_variants<- VEP_results_nc %>% 
+  filter(CADD_PHRED <30) %>% 
+  group_by(SYMBOL) %>% 
+  count()
+Susceptibility_variants %>% 
+  ggplot(aes(x= reorder(SYMBOL, -n), y= n))+
+  geom_col(stat= "identity", color= "black", fill= "green", width = 0.40)+
+  labs(title = "Genes with susceptibility variants", x= "Gene symbol", y= "Number of variants")
+
+
+```
+
+
+# Allele frequency. Make dashes NA, for all columns. Summarries based on the 1000 genome and gnomADg. Create the graph that show the allele frequency for African population and all other populations( grouped together, eg. Asian, American, Europen)
+
+
+```{r}
+VEP_results_AF_nc <- VEP_results_AF_nc %>% 
+  mutate(across(everything(), ~ifelse(.x == "-", NA, .x))) 
+
+
+VEP_results_AF_nc <-VEP_results_AF_nc %>% 
+  pivot_longer(-c(X.Uploaded_variation, Location, Allele, Codons), names_to = "key", values_to = "value")%>% 
+  filter(!is.na(value)) %>% 
+  distinct() %>% 
+  mutate(af_source = case_when(str_detect(key, "gnomADe") ~ "gnomADe",
+                               str_detect(key, "gnomADg") ~ "gnomADg",
+                               TRUE ~ "g1000")) %>% 
+  filter(af_source != "gnomADe")
+
+
+
+
+```
+
+
+# Separated the data betweeen the g1000 and gnomADg. aLL Non- African population are being replaced by the word "other". We have filtered the rows that we do not need using the filter function and lastly we grouped by, for the porpuse o summarising.
+```{r}
+
+# TO DO
+  # filter out all global AFs
+
+ # make a new column that has AFR if african, or OTHER if anything else
+
+g1000_nc <- VEP_results_AF_nc %>% 
+  filter(key !="AF"& af_source == "g1000") %>% 
+  mutate(african = case_when(str_detect(key, "AFR_AF") ~ "AFR_AF",
+                               str_detect(key, "AMR_AF") ~ "Other",
+                                str_detect(key, "EAS_AF") ~ "Other",
+                                str_detect(key, "EUR_AF") ~ "Other",
+                             str_detect(key, "SAS_AF") ~ "Other")) 
+
+
+
+gnomad_nc <- VEP_results_AF_nc %>% 
+  filter(key != "gnomADg_AF"& af_source == "gnomADg") %>% 
+  mutate(african = case_when(str_detect(key, "gnomADg_AFR_AF") ~ "gnomADg_AFR_AF",
+                               str_detect(key, "gnomADg_AMR_AF") ~ "gnomADg_Other",
+                                str_detect(key, "gnomADg_EAS_AF") ~ "gnomADg_Other",
+                                str_detect(key, "gnomADg_AMI_AF") ~ "gnomADg_Other",
+                             str_detect(key, "gnomADg_SAS_AF") ~ "gnomADg_Other",
+                             str_detect(key, "gnomADg_ASJ_AF") ~ "gnomADg_Other",
+                             str_detect(key, "gnomADg_FIN_AF") ~ "gnomADg_Other",
+                             str_detect(key, "gnomADg_MID_AF") ~ "gnomADg_Other",
+                             str_detect(key, "gnomADg_NFE_AF") ~ "gnomADg_Other",
+                             str_detect(key, "gnomADg_OTH_AF") ~ "gnomADg_Other"))
+
+
+
+# Group by rsID and new column and calculate mean for each.
+
+g1000_nc$value <- as.numeric(g1000_nc$value)
+
+plotdta_g1000<- g1000_nc %>% 
+  group_by(X.Uploaded_variation, african) %>% 
+  summarise(mean_AF = mean(value)) %>% 
+  ungroup()
+
+summary(plotdta_g1000$mean_AF)
+
+lvls <- plotdta_g1000 %>%
+  filter(african == "AFR_AF") %>% 
+  arrange(desc(mean_AF)) %>% 
+  pull(X.Uploaded_variation)
+
+plotdta_g1000$X.Uploaded_variation <- factor(plotdta_g1000$X.Uploaded_variation,
+                                       levels = lvls)
+
+plotdta_g1000 %>% 
+  mutate(above_p75 = ifelse(mean_AF> 0.001744, "Top 25%", "Botttom 75%")) %>% 
+  ggplot(aes(x= X.Uploaded_variation, y= mean_AF, group= african, color= african))+
+  geom_line(alpha= 0.7)+
+  facet_wrap(~mean_AF > 0.001744, scales= "free")
+
+plotdta_g1000 %>% 
+  mutate(above_p75 = ifelse(mean_AF> 0.001744, "Top 25%", "Botttom 75%")) %>% 
+  ggplot(aes(x= african, y= mean_AF, color= african))+
+  geom_boxplot()+
+  facet_wrap(~above_p75, scales= "free")
+  
+
+
+
+# Group by rsID and new column and calculate mean for each.???????????????????????????????? FROM VEP OUTPUT, gnoMAD DOE NOT HAVE ANY VALUE (EVERYTHING IS NA).
+gnomad_nc$value<- as.numeric(gnomad_nc$value)
+
+plotdta_gnomad<- gnomad_nc %>% 
+  group_by(X.Uploaded_variation, african) %>% 
+  summarise(mean_AF = mean(value)) %>% 
+  ungroup()
+
+summary(plotdta_gnomad$mean_AF)
+
+lvls <- plotdta_gnomad %>%
+  filter(african == "gnomADg_AFR_AF") %>% 
+  arrange(desc(mean_AF)) %>% 
+  pull(X.Uploaded_variation)
+
+
+  
+```
+
+
+
+# Created the new column on the plotdta, we used the function case_when. We want to separate when the  african allele frequency is greater/ equall too  allele frequency of other  population, the new column must record as "African". When it is less than, it must record as other. In short we were hoping to count how many times does African allele frequency is greater or equall too allele frequency of non- African population(other) and vice verse.
+
+```{r}
+X<- plotdta_g1000 %>% 
+  pivot_wider(names_from = african, values_from = mean_AF) %>% 
+  count() %>% 
+  pull(n)
+
+plotdta_g1000 %>% 
+  pivot_wider(names_from = african, values_from = mean_AF) %>% 
+  mutate(newcolumn= case_when(AFR_AF>= Other ~ "African", AFR_AF<Other ~"Other")) %>% 
+  group_by(newcolumn) %>% 
+  count() %>% 
+  ungroup() %>% 
+  mutate(Percentage= n/x*100)
+
+
+
+
+```
+
+
+#On VEP output for NeuroChip array, draw the line graph using the CADD score  cut-off of 20 for g1000
+
+```{r}
+VEP_results_nc %>% 
+  filter(CADD_PHRED>=20) %>% 
+  select(X.Uploaded_variation) %>% 
+  inner_join(plotdta_g1000) %>% 
+  ggplot(aes(x= X.Uploaded_variation, y= mean_AF, group= african, color= african))+
+  geom_line(alpha= 0.7)
+
+
+VEP_results_nc %>% 
+  filter(CADD_PHRED <20) %>% 
+  select(X.Uploaded_variation) %>% 
+  inner_join(plotdta_g1000) %>% 
+  ggplot(aes(x= X.Uploaded_variation, y= mean_AF, group= african, color= african))+
+  geom_line(alpha= 0.7)
+  
+
+```
 
 
 

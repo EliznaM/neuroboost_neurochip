@@ -17,6 +17,7 @@ library(kableExtra)
 ## load in data
 
 ```{r}
+
 data_nb <- read_csv("data/pd_gene_anno_edited.csv")
 #VEP_results <- read.delim("VEP_results.txt")
 
