@@ -164,13 +164,15 @@ data_nb <- data_nb %>% mutate(location = str_extract(location, "chr[A-Za-z0-9]{1
 
 ```{r}
 # All SNPs in data
-grp <- data_nb %>% group_by(location) %>% count()
+grp <- data_nb %>% 
+      group_by(location) %>% 
+       count()
 
 lvls <- paste("chr", 1:22, sep = "")
 lvls <- c(lvls, "chrX")
 
 grp$location <- factor(grp$location, levels = lvls)
- 
+
 grp %>% 
   ggplot(aes(x = reorder(location,-n), y = n))+
   geom_col(stat= "identity", color= "black", fill= "green", width= 0.40) +
@@ -286,7 +288,9 @@ Imported only SNPs with rsIDs to VEP.
 #Group by biotype
 
 ```{r}
-biotype <- VEP_results_nb %>% group_by(BIOTYPE) %>% count()
+biotype <- VEP_results_nb %>% 
+             group_by(BIOTYPE) %>% 
+                 count()
 
 biotype %>% 
   ggplot(aes(x = reorder(BIOTYPE,-n), y = n))+
@@ -308,7 +312,9 @@ biotype %>%
 ## Group by consequence. Make summarries using the bar graph. Arrange the bars from the maximum to the minimum variant number.
 
 ```{r}
-consequence <- VEP_results_nb %>% group_by(Consequence) %>% count()
+consequence <- VEP_results_nb %>% 
+                 group_by(Consequence) %>% 
+                    count()
 
 
 # change order for this graph to have bars from tall to short
@@ -336,7 +342,9 @@ consequence %>%
 ##Group by IMPACT. Make summarries using bar graph and arrange the bars from high to low.
 
 ```{r}
-IMPACT <- VEP_results_nb %>% group_by(IMPACT) %>% count()
+IMPACT <- VEP_results_nb %>% 
+             group_by(IMPACT) %>%
+                count()
 
 # reorder bars in graph to be in order
 IMPACT %>%
@@ -479,7 +487,7 @@ ggplot(aes(x= reorder(gene, -Percentage_benign_PolyPhen), y= Percentage_benign_P
 Percentage_probably_damaging<- VEP_results_nb %>%
   rename(gene = SYMBOL) %>% 
   group_by(gene) %>% 
-  count(name = "total_n") %>%        #?????????????????????
+  count(name = "total_n") %>%        
   inner_join(VEP_results_nb %>% 
                rename(gene = SYMBOL) %>% 
   group_by(gene, PolyPhen_category) %>% 
@@ -555,7 +563,7 @@ plotdta %>%
 
 ```
 
-##Group all genes that have pathagenic variants together, depending on the cut-off that we have choosen (cut-off is 30, meaning those variants  above 30 are pathogenic and below 30 are susceptibility variants). Arrange the gene symbols based on their highest value of variant.Draw the bar graph of each variant type.
+##Group all genes that have pathagenic variants together, depending on the cut-off that we have choosen (cut-off is 20, meaning those variants  above and equal to 20 are pathogenic and below 20are susceptibility variants). Arrange the gene symbols based on their highest value of variant.Draw the bar graph of each variant type.
 
 
 ```{r}
@@ -658,7 +666,7 @@ VEP_results_AF_nb <- VEP_results_AF_nb %>%
 
 ```
 
-#Separated the data betweeen the g1000 and gnomADg. All Non- African population are being replaced by the word "other". We have filtered the rows that we do not need using the filter function and lastly we grouped by, for the purpose of summarising.
+#Separated the data betweeen the g1000 and gnomADg. All Non- African population are being replaced by the word "other". We have filtered the rows that we don't need using the filter function and lastly we grouped by, for the purpose of summarising.
 
 ```{r}
 # filter out all global AFs and af_source
@@ -744,7 +752,7 @@ lvls <- plotdta_gnom %>%
 
 plotdta_gnom$X.Uploaded_variation <- factor(plotdta_gnom$X.Uploaded_variation,
                                        levels = lvls)
-p75 <- 0.0001206
+p75 <- 0.009938
 
 plotdta_gnom %>% 
   ggplot(aes(x= X.Uploaded_variation, y= median_AF, group= african, color= african))+
@@ -833,9 +841,15 @@ plotdta <- VEP_results_nb %>%
 
 summary(plotdta$median_AF)
 
-p75 <- 0.00100
+p75 <- 0.00100       #????????????????????????????
 
 # TO DO:  order by African AF
+
+lvls <- plotdta %>%
+  filter(african == "AFR_AF") %>% 
+  arrange(desc(median_AF)) %>% 
+  pull(X.Uploaded_variation)
+
 plotdta %>% 
   mutate(above_p75 = ifelse(median_AF> p75, "Top 25%", "Botttom 75%")) %>% 
   ggplot(aes(x= X.Uploaded_variation, y= median_AF, group= african, color= african))+
@@ -843,9 +857,14 @@ plotdta %>%
   facet_wrap(~above_p75, scales = "free")
 
 # TO DO:  add boxplot for the above
+plotdta%>% 
+  mutate(above_p75 = ifelse(median_AF > p75, "Top 25%", "Bottom 75%") )%>% 
+  ggplot(aes( y= median_AF, x= african, color= african))+
+  geom_boxplot()+
+  facet_wrap(~above_p75, scales= "free")
 
 
-# -------------------------------
+# CADD score below 20 in g1000
 plotdta <- VEP_results_nb %>% 
   filter(CADD_PHRED<20) %>% 
   select(X.Uploaded_variation) %>% 
@@ -857,14 +876,24 @@ p75 <- 0.01365
 
 # TO DO:  order by African AF
 
+lvls<- plotdta %>% 
+      filter(african == "AFR_AF") %>% 
+        arrange(desc(median_AF)) %>% 
+         pull(X.Uploaded_variation)
+
 plotdta %>% 
   mutate(above_p75 = ifelse(median_AF> p75, "Top 25%", "Botttom 75%")) %>% 
-  ggplot(aes(x= X.Uploaded_variation, y= median_AF, group= african, color= african))+
+  ggplot(aes(x= X.Uploaded_variation, y= median_AF,group= african, color= african))+
   geom_line(alpha =0.7)+
   facet_wrap(~above_p75, scales = "free")
 
 # TO DO:  add boxplot for the above
 
+plotdta%>% 
+  mutate(above_p75 = ifelse(median_AF > p75, "Top 25%", "Bottom 75%") )%>% 
+  ggplot(aes( y= median_AF, x= african, color= african))+
+  geom_boxplot()+
+  facet_wrap(~above_p75, scales= "free")
 
 
 
@@ -884,6 +913,10 @@ summary(plotdta$median_AF)
 p75 <- 0.0000483
 
 # TO DO : order by African AF
+lvls<- plotdta %>% 
+       filter(african =="gnomADg_AFR_AF") %>% 
+         arrange(desc(median_AF)) %>% 
+           pull(X.Uploaded_variation)
 
 plotdta %>% 
    mutate(above_p75 = ifelse(median_AF> p75, "Top 25%", "Botttom 75%")) %>% 
@@ -892,11 +925,17 @@ plotdta %>%
   facet_wrap(~above_p75, scales = "free")
  
 # TO DO:  add boxplot for the above
+plotdta %>% 
+  mutate(above_p75 = ifelse(median_AF > p75, "Top 25%", "Bottom 75%")) %>% 
+   ggplot(aes( y= median_AF, x= african, color= african))+
+    geom_boxplot()+
+      facet_wrap(~above_p75, scales= "free")
 
 
 
 
-# --------------------------------------------
+
+# CADD score below 20 in gnomADg
 
 plotdta <- VEP_results_nb %>% 
   filter(CADD_PHRED<20) %>% 
@@ -908,6 +947,10 @@ summary(plotdta$median_AF)
 p75 <- 0.0000967 
 
 # TO DO : order by African AF
+lvls<- plotdta %>% 
+       filter(african =="gnomADg_AFR_AF") %>% 
+         arrange(desc(median_AF)) %>% 
+           pull(X.Uploaded_variation)
 
 plotdta %>% 
   mutate(above_p75 = ifelse(median_AF> p75, "Top 25%", "Botttom 75%")) %>% 
@@ -918,8 +961,11 @@ plotdta %>%
 
 # TO DO:  add boxplot for the above
 
-
-
+plotdta %>% 
+  mutate(above_p75 = ifelse(median_AF > p75, "Top 25%", "Bottom 75%")) %>% 
+   ggplot(aes( y= median_AF, x= african, color= african))+
+    geom_boxplot()+
+      facet_wrap(~above_p75, scales= "free")
 
 
 ```
@@ -1309,6 +1355,10 @@ summary(plotdta$median_AF)
 p75 <- 0.000500
 
 # TO DO:  order by African AF
+lvls<- plotdta %>% 
+        filter(african =="AFR_AF") %>% 
+         arrange(desc(median_AF)) %>% 
+            pull(X.Uploaded_variation)
 plotdta %>% 
    mutate(above_p75 = ifelse(median_AF> p75, "Top 25%", "Botttom 75%")) %>% 
   ggplot(aes(x= X.Uploaded_variation, y= median_AF, group= african, color= african))+
@@ -1316,11 +1366,16 @@ plotdta %>%
   facet_wrap(~above_p75, scales = "free")
 
 # TO DO:  add boxplot for the above
+plotdta%>% 
+  mutate(above_p75 = ifelse(median_AF> p75, "Top 25%", "Botttom 75%")) %>% 
+  ggplot(aes(x= african, y= median_AF, color= african))+
+  geom_boxplot()+
+  facet_wrap(~above_p75, scales= "free")
+  
 
 
 
-
-# ---------------------------------------------------------------
+# CADD score below 20 in g1000
 
 plotdta <- VEP_results_nc %>% 
   filter(CADD_PHRED <20) %>% 
@@ -1332,6 +1387,11 @@ summary(plotdta$median_AF)
 p75 <- 0.00230
   
 # TO DO:  order by African AF
+lvls<- plotdta %>% 
+        filter(african =="AFR_AF") %>% 
+         arrange(desc(median_AF)) %>% 
+          pull(X.Uploaded_variation)
+
 plotdta %>% 
    mutate(above_p75 = ifelse(median_AF> p75, "Top 25%", "Botttom 75%")) %>% 
   ggplot(aes(x= X.Uploaded_variation, y= median_AF, group= african, color= african))+
@@ -1341,7 +1401,12 @@ plotdta %>%
   
 # TO DO:  add boxplot for the above
 
-
+plotdta%>% 
+  mutate(above_p75 = ifelse(median_AF> p75, "Top 25%", "Botttom 75%")) %>% 
+  ggplot(aes(x= african, y= median_AF, color= african))+
+  geom_boxplot()+
+  facet_wrap(~above_p75, scales= "free")
+  
 
 
 ```
